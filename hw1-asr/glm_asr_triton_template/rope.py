@@ -40,8 +40,25 @@ def compute_freqs_kernel(
     stride_sin1,
     BLOCK: tl.constexpr,
 ):
-    """Compute cos and sin for rotary embeddings."""
+    """
+    Compute cos and sin for rotary embeddings.
+
+    *** TODO: Implement this kernel ***
+
+    Grid: (seq_len,)
+    """
     pid = tl.program_id(0)
+
+    # ============================================================================
+    # TODO: Implement frequency computation
+    # ============================================================================
+    #
+    # Step 1: Load position as scalar
+    # Step 2: Load inverse frequencies
+    # Step 3: Compute freqs = position * inv_freq
+    # Step 4: Compute cos and sin
+    # Step 5: Store concatenated cos/sin
+
     offs = tl.arange(0, BLOCK)
     mask = offs < half_dim
 

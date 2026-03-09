@@ -6,8 +6,6 @@ End-to-end implementation using Triton kernels
 Fill in the TODO sections to implement attention using Triton kernels
 """
 
-import os
-
 import numpy as np
 import torch
 import triton
@@ -49,9 +47,20 @@ def attention_scores_kernel(
     """
     Compute scaled attention scores for a single query position.
     Grid: (batch_heads, seq_q)
+
+    *** TODO: Implement this kernel ***
     """
     pid_bh = tl.program_id(0)
     pid_q = tl.program_id(1)
+
+    # ============================================================================
+    # TODO: Implement attention score computation
+    # ============================================================================
+    #
+    # Step 1: Load query vector for this position
+    # Step 2: Load all keys for this batch_head
+    # Step 3: Compute dot-product scores and scale
+    # Step 4: Store scores
 
     offs_k = tl.arange(0, BLOCK_K)
     offs_d = tl.arange(0, BLOCK_D)
@@ -87,6 +96,16 @@ def softmax_inplace_kernel(scores_ptr, stride_s, seq_k, BLOCK_SIZE: tl.constexpr
     Grid: (batch_heads * seq_q,)
     """
     row = tl.program_id(0)
+
+    # ============================================================================
+    # TODO: Implement softmax
+    # ============================================================================
+    #
+    # Step 1: Load scores row with masking
+    # Step 2: Subtract max for stability
+    # Step 3: Compute exp and normalize
+    # Step 4: Store back
+
     offs = tl.arange(0, BLOCK_SIZE)
     mask = offs < seq_k
 
@@ -125,6 +144,15 @@ def attention_output_kernel(
     pid_bh = tl.program_id(0)
     pid_q = tl.program_id(1)
 
+    # ============================================================================
+    # TODO: Implement attention output computation
+    # ============================================================================
+    #
+    # Step 1: Load attention weights for this query
+    # Step 2: Load all values for this batch_head
+    # Step 3: Compute weighted sum
+    # Step 4: Store output
+
     offs_k = tl.arange(0, BLOCK_K)
     offs_d = tl.arange(0, BLOCK_D)
 
@@ -152,113 +180,6 @@ def attention_output_kernel(
         + offs_d * stride_o2,
         out,
         mask=offs_d < head_dim,
-    )
-
-
-@triton.autotune(
-    configs=[
-        triton.Config({"BLOCK_M": 16, "BLOCK_N": 32}, num_warps=4, num_stages=2),
-        triton.Config({"BLOCK_M": 16, "BLOCK_N": 64}, num_warps=4, num_stages=2),
-        triton.Config({"BLOCK_M": 32, "BLOCK_N": 64}, num_warps=8, num_stages=2),
-    ],
-    key=["seq_q", "seq_k", "head_dim"],
-)
-@triton.jit
-def flash_attention_fwd_kernel(
-    q_ptr,
-    k_ptr,
-    v_ptr,
-    out_ptr,
-    scale,
-    seq_q,
-    seq_k,
-    head_dim,
-    stride_q0,
-    stride_q1,
-    stride_q2,
-    stride_k0,
-    stride_k1,
-    stride_k2,
-    stride_v0,
-    stride_v1,
-    stride_v2,
-    stride_o0,
-    stride_o1,
-    stride_o2,
-    BLOCK_M: tl.constexpr,
-    BLOCK_N: tl.constexpr,
-    BLOCK_D: tl.constexpr,
-    IS_CAUSAL: tl.constexpr,
-):
-    """FlashAttention-style forward kernel with online softmax."""
-    pid_m = tl.program_id(0)
-    pid_bh = tl.program_id(1)
-
-    offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
-    offs_d = tl.arange(0, BLOCK_D)
-
-    mask_m = offs_m < seq_q
-    mask_d = offs_d < head_dim
-
-    q = tl.load(
-        q_ptr
-        + pid_bh * stride_q0
-        + offs_m[:, None] * stride_q1
-        + offs_d[None, :] * stride_q2,
-        mask=mask_m[:, None] & mask_d[None, :],
-        other=0.0,
-    ).to(tl.float32)
-
-    m_i = tl.where(mask_m, -float("inf"), 0.0)
-    l_i = tl.where(mask_m, 0.0, 1.0)
-    acc = tl.zeros((BLOCK_M, BLOCK_D), dtype=tl.float32)
-
-    for start_n in range(0, seq_k, BLOCK_N):
-        offs_n = start_n + tl.arange(0, BLOCK_N)
-        mask_n = offs_n < seq_k
-
-        k = tl.load(
-            k_ptr
-            + pid_bh * stride_k0
-            + offs_n[:, None] * stride_k1
-            + offs_d[None, :] * stride_k2,
-            mask=mask_n[:, None] & mask_d[None, :],
-            other=0.0,
-        ).to(tl.float32)
-        v = tl.load(
-            v_ptr
-            + pid_bh * stride_v0
-            + offs_n[:, None] * stride_v1
-            + offs_d[None, :] * stride_v2,
-            mask=mask_n[:, None] & mask_d[None, :],
-            other=0.0,
-        ).to(tl.float32)
-
-        qk = tl.dot(q, tl.trans(k)) * scale
-        qk = tl.where(mask_n[None, :], qk, -float("inf"))
-
-        if IS_CAUSAL:
-            causal = offs_m[:, None] >= offs_n[None, :]
-            qk = tl.where(causal, qk, -float("inf"))
-
-        m_ij = tl.maximum(m_i, tl.max(qk, axis=1))
-        p = tl.exp(qk - m_ij[:, None])
-        l_ij = tl.sum(p, axis=1)
-
-        alpha = tl.exp(m_i - m_ij)
-        l_i = l_i * alpha + l_ij
-        acc = acc * alpha[:, None]
-        acc += tl.dot(p.to(tl.float32), v)
-        m_i = m_ij
-
-    out = acc / l_i[:, None]
-    tl.store(
-        out_ptr
-        + pid_bh * stride_o0
-        + offs_m[:, None] * stride_o1
-        + offs_d[None, :] * stride_o2,
-        out,
-        mask=mask_m[:, None] & mask_d[None, :],
     )
 
 
@@ -388,57 +309,6 @@ def scaled_dot_product_attention(
 
     if scale is None:
         scale = 1.0 / np.sqrt(head_dim)
-
-    # FlashAttention is enabled by default to satisfy assignment optimization requirements.
-    enable_flash = os.environ.get("GLM_ASR_ENABLE_FLASH", "1") == "1"
-
-    # Fast path: FlashAttention-style kernel (online softmax + fused V accumulation).
-    use_flash = (
-        enable_flash
-        and
-        q.is_cuda
-        and attention_mask is None
-        and head_dim <= MAX_ATTENTION_DIM
-    )
-
-    if use_flash:
-        q_flat = q.reshape(batch * num_heads, seq_q, head_dim).to(torch.float32).contiguous()
-        k_flat = k.reshape(batch * num_heads, seq_k, head_dim).to(torch.float32).contiguous()
-        v_flat = v.reshape(batch * num_heads, seq_k, head_dim).to(torch.float32).contiguous()
-
-        output = torch.empty(
-            (batch * num_heads, seq_q, head_dim),
-            dtype=torch.float32,
-            device=q.device,
-        )
-
-        grid = lambda META: (triton.cdiv(seq_q, META["BLOCK_M"]), batch * num_heads)
-        flash_attention_fwd_kernel[grid](
-            q_flat,
-            k_flat,
-            v_flat,
-            output,
-            float(scale),
-            seq_q,
-            seq_k,
-            head_dim,
-            q_flat.stride(0),
-            q_flat.stride(1),
-            q_flat.stride(2),
-            k_flat.stride(0),
-            k_flat.stride(1),
-            k_flat.stride(2),
-            v_flat.stride(0),
-            v_flat.stride(1),
-            v_flat.stride(2),
-            output.stride(0),
-            output.stride(1),
-            output.stride(2),
-            BLOCK_D=next_power_of_two(head_dim),
-            IS_CAUSAL=1 if is_causal else 0,
-        )
-
-        return output.reshape(batch, num_heads, seq_q, head_dim).to(q.dtype)
 
     seq_k_padded = next_power_of_two(seq_k)
     head_dim_padded = next_power_of_two(head_dim)

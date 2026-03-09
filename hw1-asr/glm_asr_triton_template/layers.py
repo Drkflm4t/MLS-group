@@ -51,8 +51,24 @@ def rmsnorm_kernel(
     eps,
     BLOCK_SIZE: tl.constexpr,
 ):
-    """RMSNorm: x / RMS(x) * weight."""
+    """
+    RMSNorm: x / RMS(x) * weight
+
+    *** TODO: Implement this kernel ***
+
+    Grid: (batch_size,)
+    """
     pid = tl.program_id(0)
+
+    # ============================================================================
+    # TODO: Implement RMSNorm kernel
+    # ============================================================================
+    #
+    # Step 1: Load input row and weight
+    # Step 2: Compute variance = mean(x^2)
+    # Step 3: Normalize: x / sqrt(variance + eps)
+    # Step 4: Apply weight and store
+
     offs = tl.arange(0, BLOCK_SIZE)
     mask = offs < hidden_size
 
@@ -77,8 +93,25 @@ def layernorm_kernel(
     eps,
     BLOCK_SIZE: tl.constexpr,
 ):
-    """LayerNorm: (x - mean) / sqrt(var + eps) * weight + bias."""
+    """
+    LayerNorm: (x - mean) / sqrt(var + eps) * weight + bias
+
+    *** TODO: Implement this kernel ***
+
+    Grid: (batch_size,)
+    """
     pid = tl.program_id(0)
+
+    # ============================================================================
+    # TODO: Implement LayerNorm kernel
+    # ============================================================================
+    #
+    # Step 1: Load input, weight, and bias
+    # Step 2: Compute mean
+    # Step 3: Center the data
+    # Step 4: Compute variance = mean((x - mean)^2)
+    # Step 5: Normalize and apply affine transform
+
     offs = tl.arange(0, BLOCK_SIZE)
     mask = offs < hidden_size
 
@@ -96,8 +129,21 @@ def layernorm_kernel(
 
 @triton.jit
 def gelu_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-    """GELU using tanh approximation."""
+    """
+    GELU using tanh approximation.
+
+    *** TODO: Implement this kernel ***
+    """
     pid = tl.program_id(0)
+
+    # ============================================================================
+    # TODO: Implement GELU kernel
+    # ============================================================================
+    #
+    # Step 1: Load input tile
+    # Step 2: Compute tanh approximation
+    # Step 3: Store output
+
     offs = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
     mask = offs < n_elements
     x = tl.load(x_ptr + offs, mask=mask, other=0.0).to(tl.float32)
@@ -111,8 +157,21 @@ def gelu_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
 
 @triton.jit
 def silu_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
-    """SiLU/Swish: x * sigmoid(x)."""
+    """
+    SiLU/Swish: x * sigmoid(x)
+
+    *** TODO: Implement this kernel ***
+    """
     pid = tl.program_id(0)
+
+    # ============================================================================
+    # TODO: Implement SiLU kernel
+    # ============================================================================
+    #
+    # Step 1: Load input tile
+    # Step 2: Compute sigmoid
+    # Step 3: Multiply and store
+
     offs = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
     mask = offs < n_elements
     x = tl.load(x_ptr + offs, mask=mask, other=0.0).to(tl.float32)
@@ -121,14 +180,6 @@ def silu_kernel(x_ptr, y_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
     tl.store(y_ptr + offs, y, mask=mask)
 
 
-@triton.autotune(
-    configs=[
-        triton.Config({"BLOCK_M": 32, "BLOCK_N": 64, "BLOCK_K": 32}, num_warps=4, num_stages=2),
-        triton.Config({"BLOCK_M": 64, "BLOCK_N": 64, "BLOCK_K": 32}, num_warps=4, num_stages=3),
-        triton.Config({"BLOCK_M": 64, "BLOCK_N": 128, "BLOCK_K": 32}, num_warps=8, num_stages=3),
-    ],
-    key=["M", "N", "K"],
-)
 @triton.jit
 def linear_kernel_tf32(
     a_ptr,
@@ -148,11 +199,23 @@ def linear_kernel_tf32(
     BLOCK_K: tl.constexpr,
 ):
     """
-    Tensor core-style matmul: output = A @ B.
+    TF32-style matmul: output = A @ B.
     A: (M, K), B: (K, N), C: (M, N)
+
+    *** TODO: Implement this kernel ***
+
+    Grid: (M // BLOCK_M, N // BLOCK_N)
     """
     pid_m = tl.program_id(0)
     pid_n = tl.program_id(1)
+
+    # ============================================================================
+    # TODO: Implement tiled matrix multiplication
+    # ============================================================================
+    #
+    # Step 1: Initialize accumulator
+    # Step 2: Loop over K tiles and accumulate tl.dot
+    # Step 3: Store the result
 
     offs_m = pid_m * BLOCK_M + tl.arange(0, BLOCK_M)
     offs_n = pid_n * BLOCK_N + tl.arange(0, BLOCK_N)
@@ -321,8 +384,22 @@ def embedding_kernel(
 
 @triton.jit
 def softmax_kernel(x_ptr, y_ptr, stride_x, stride_y, n_cols, BLOCK_SIZE: tl.constexpr):
-    """Numerically stable softmax over last dimension."""
+    """
+    Numerically stable softmax over last dimension.
+
+    *** TODO: Implement this kernel ***
+    """
     row = tl.program_id(0)
+
+    # ============================================================================
+    # TODO: Implement softmax kernel
+    # ============================================================================
+    #
+    # Step 1: Load row with masking
+    # Step 2: Subtract max for stability
+    # Step 3: Compute exp and normalize
+    # Step 4: Store output
+
     offs = tl.arange(0, BLOCK_SIZE)
     mask = offs < n_cols
 
@@ -624,7 +701,7 @@ class Linear:
     TILE_N = 64
     TILE_K = 32
 
-    BACKEND = "adaptive"
+    BACKEND = "torch"
 
     def __init__(self, in_features: int, out_features: int, bias: bool = True):
         self.in_features = in_features
@@ -646,11 +723,11 @@ class Linear:
             self._K_padded = pad_to_multiple(K, self.TILE_K)
             self._N_padded = pad_to_multiple(N, self.TILE_N)
 
-            weight_t = self.weight.t()
+            weight_t = self.weight.t().contiguous()
             if self._K_padded > K or self._N_padded > N:
                 weight_pad = torch.zeros(
                     (self._K_padded, self._N_padded),
-                    dtype=weight_t.dtype,
+                    dtype=torch.float32,
                     device=weight_t.device,
                 )
                 weight_pad[:K, :N] = weight_t
@@ -719,9 +796,9 @@ class Linear:
             (M_padded, self._N_padded), dtype=torch.float32, device=x.device
         )
 
-        grid = lambda META: (
-            triton.cdiv(M_padded, META["BLOCK_M"]),
-            triton.cdiv(self._N_padded, META["BLOCK_N"]),
+        grid = (
+            triton.cdiv(M_padded, self.TILE_M),
+            triton.cdiv(self._N_padded, self.TILE_N),
         )
         linear_kernel_tf32[grid](
             x_padded,
@@ -736,6 +813,9 @@ class Linear:
             self._weight_t_padded.stride(1),
             output.stride(0),
             output.stride(1),
+            BLOCK_M=self.TILE_M,
+            BLOCK_N=self.TILE_N,
+            BLOCK_K=self.TILE_K,
         )
 
         output = output[:M, :N]
@@ -857,8 +937,8 @@ class MLP:
         if self._gate_weight_t is None and self.use_gating:
             if self.gate_proj.weight.device != self.up_proj.weight.device:
                 self.up_proj.weight = self.up_proj.weight.to(self.gate_proj.weight.device)
-            self._gate_weight_t = self.gate_proj.weight.t()
-            self._up_weight_t = self.up_proj.weight.t()
+            self._gate_weight_t = self.gate_proj.weight.t().contiguous()
+            self._up_weight_t = self.up_proj.weight.t().contiguous()
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         if self.use_gating and MLP.FUSED and x.is_cuda:
@@ -901,11 +981,11 @@ class MLP:
 
         if K != K_pad or N != N_pad:
             gate_w_padded = torch.zeros(
-                (K_pad, N_pad), dtype=self._gate_weight_t.dtype, device=x.device
+                (K_pad, N_pad), dtype=torch.float32, device=x.device
             )
             gate_w_padded[:K, :N] = self._gate_weight_t
             up_w_padded = torch.zeros(
-                (K_pad, N_pad), dtype=self._up_weight_t.dtype, device=x.device
+                (K_pad, N_pad), dtype=torch.float32, device=x.device
             )
             up_w_padded[:K, :N] = self._up_weight_t
         else:
@@ -974,7 +1054,7 @@ class EncoderMLP:
     def _prepare_fused_weights(self):
         """Prepare pre-transposed weights for fused kernel."""
         if self._fc1_weight_t is None:
-            self._fc1_weight_t = self.fc1.weight.t()
+            self._fc1_weight_t = self.fc1.weight.t().contiguous()
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         if EncoderMLP.FUSED and self.activation == "gelu" and x.is_cuda:
@@ -1012,7 +1092,7 @@ class EncoderMLP:
 
         if K != K_pad or N != N_pad:
             fc1_w_padded = torch.zeros(
-                (K_pad, N_pad), dtype=self._fc1_weight_t.dtype, device=x.device
+                (K_pad, N_pad), dtype=torch.float32, device=x.device
             )
             fc1_w_padded[:K, :N] = self._fc1_weight_t
         else:
