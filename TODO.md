@@ -5,6 +5,7 @@
 - [x] 本轮只完成并验收第 1 项优化：Adjust tile/block sizes。
 - [x] 本轮实验记录以 `TODO.md` 为唯一来源，不再依赖 `RECORD.md`。
 - [x] 统一测试口径：同一 `srun` 会话、同一环境变量、同一脚本参数。
+- [x] 报告写作硬约束：主文（main body）页数不超过 8 页（参考文献不计入页数）。
 - [x] 每个配置连续跑 3 次，丢第 1 次，统计后 2 次均值。
 - [x] 统一记录 4 个指标：
   - `Audio Encoder`
@@ -85,7 +86,7 @@
 - [x] 主目标：`Total (estimated for 50 tokens)` 最低。
 - [x] 次目标：`Decoder Prefill` 不显著回退。
 - [x] 最终选定 1 组作为第 1 项优化默认配置（记为 `TD_1`）。当前候选：C4。
-- [ ] 在该最终配置下跑 `./benchmark.sh glm_asr_triton_template`，确认：
+- [x] 在该最终配置下跑 `./benchmark.sh glm_asr_triton_template`，确认：
   - `Accuracy` 达标
   - `Status: PASS`
 
@@ -100,10 +101,10 @@
 
 ## 6. 完成标志
 
-- [ ] 已有 2-3 组以上配置对比（实际为 C0-C5 共 6 组）。
-- [ ] 已明确“为何选最终配置”且有同口径数据支撑。
-- [ ] 正确性回归 `PASS`。
-- [ ] 第 1 项优化可独立成稿。
+- [x] 已有 2-3 组以上配置对比（实际为 C0-C5 共 6 组）。
+- [x] 已明确“为何选最终配置”且有同口径数据支撑。
+- [x] 正确性回归 `PASS`。
+- [x] 第 1 项优化可独立成稿。
 
 ## 7. 第 2 项优化（Kernel Fusion）重测记录（以本文件为准）
 
@@ -147,10 +148,10 @@
 ### 7.4 结论（第 2 项）
 
 - 结论：第 2 项优化在本轮重测中总体有效。
-- 依据：端到端 `Total` 从 `2584.77 ms` 降到 `2484.10 ms`，改善 `3.89%`。
+- 依据：`benchmark_detailed` 口径下 `Total (50 tokens est.)` 从 `2584.77 ms` 降到 `2484.10 ms`，改善 `3.89%`。
 - 边界：当前收益主要来自 `Prefill/Decode`，`Audio Encoder` 存在回退，后续可针对 encoder 继续调参或分路径策略优化。
 
-## 8. 与 report.tex 写作需求对齐（仅校验证据，不写正文）
+## 8. 实验验收 Gate（写作前检查）
 
 ### 8.1 当前已满足（可解释 + 有作用）
 
@@ -158,9 +159,10 @@
 - [x] 第 1 项优化可解释：每组都有 `原因 -> 期望 -> 实测 -> 差异原因`。
 - [x] 第 1 项优化有效：相对 C0，最优 C4 `Total -7.56%`。
 - [x] 第 2 项优化可解释：明确了融合动机、预期收益点与不一致项（Audio Encoder 回退）。
-- [x] 第 2 项优化有效：`TD_1(C4_2) -> TD_2` 端到端 `Total -3.89%`。
+- [x] 第 2 项优化在 `benchmark_detailed` 口径下有效：`TD_1(C4_2) -> TD_2` 的 `Total (50 tokens est.) -3.89%`。
 - [x] 第 3 项优化可解释：FlashAttention-style 路径的触发条件、回退条件与参数已明确。
-- [x] 第 3 项优化有效（本轮）：`TD_2 -> TD_3` 端到端 `Total -8.13%`。
+- [x] 第 3 项优化在 `benchmark_detailed` 口径下有效：`TD_2 -> TD_3` 的 `Total (50 tokens est.) -8.13%`。
+- [x] 第 3 项优化在 `benchmark.sh` 端到端口径下同样有效：`TD_2 -> TD_3` 的 `Time -15.52%`。
 
 ### 8.2 仍需补齐（为报告可审阅性准备）
 
@@ -170,15 +172,6 @@
 - [x] 参数快照（已记录，可复现）：
   - `TD_1 (C4_2)`：Linear/MLP/EncoderMLP 统一为 `BLOCK_M/BLOCK_N/BLOCK_K=64/64/64`，`num_warps=4`，`num_stages=2`。
   - `TD_2`：在 `TD_1 (C4_2)` 同参数下，开启第 2 项融合路径（EncoderMLP 走 `linear_bias_gelu_kernel` 当 `fc1` 含 bias；无 bias 时回退 `linear_gelu_kernel`）。
-
-### 8.3 报告可直接引用的结论句（草案级）
-
-- [ ] 优化1结论句：
-  - 在统一口径下，tile/block + launch 参数的控制变量实验显示 C4（`64/64/64, w4, s2`）为当前最优，较 C0 端到端 `Total` 改善 `7.56%`。
-- [ ] 优化2结论句：
-  - 在 C4 基线上接入 `Linear + Bias + GELU` 融合后，`TD_2` 相比 `TD_1(C4_2)` 的端到端 `Total` 进一步改善 `3.89%`，主要收益来自 `Prefill/Decode`。
-- [ ] 优化3结论句：
-  - 在 `TD_2` 基线上接入 FlashAttention-style 路径后，`TD_3` 端到端 `Total` 进一步改善 `8.13%`；收益主要来自 `Audio Encoder`，而 `Prefill/Decode Step` 小幅波动，需结合复跑均值判断稳定性。
 
 ### 8.4 当前判定
 
@@ -226,10 +219,11 @@
 
 ### 10.1 Profiling Setup（Section 3.1 可直接引用）
 
-- 作业资源：`srun -p Teaching -w saxa --gres gpu:1 --mem=24G --pty bash`。
+- 作业资源：`srun -p Teaching -w saxa --gres=gpu:1g.18gb:1 --mem=24G --pty bash`。
 - 节点资源口径：`saxa` 在 Slurm GRES 中为 MIG 资源池（`gpu:1g.18gb` 与 `gpu:3g.71gb`）。
-- 实际设备：`nvidia-smi -L` 显示 `NVIDIA H200` + `MIG 1g.18gb Device 0`。
+- 实际设备：本次会话探针显示 `device_name = NVIDIA H200 MIG 1g.18gb`，`device_count = 1`。
 - 软件环境来源：`source utils/setup-triton.sh` 创建 `mls` 环境（Python 3.11），安装 `torch/numpy/triton/cupy-cuda12x/datasets`。
+- 运行时版本快照（本轮）：`torch = 2.10.0+cu128`，`triton = 3.6.0`，`cuda_available = True`。
 - 测量脚本口径：`./benchmark_detailed.sh glm_asr_triton_template --runs 5`，同输入音频（`test_audio.wav`，3.50s@16kHz），同脚本参数，比较使用均值结果。
 - 结果边界：本轮 detailed 输出为 `DETAILED OPERATOR PROFILING (TORCH)`，属于组件级 wall-clock 工程结论。
 
@@ -254,3 +248,83 @@
   - 第 2 项：`TD_1(C4_2)` vs `TD_2`。
   - 第 3 项：`TD_2` vs `TD_3`。
 - 可比性约束：同会话类型、同脚本、同输入、同 runs 参数，减少环境漂移影响。
+
+## 11. 端到端 benchmark.sh 主对比（example / TD_1 / TD_2 / TD_3）
+
+说明：
+
+- 同一会话口径：`srun -p Teaching -w saxa --gres=gpu:1g.18gb:1 --mem=24G --pty bash`。
+- 同一输入：`test_audio.wav`（3.50s）。
+- 同一脚本参数：`benchmark.sh` 默认 `warmup=1, runs=3`。
+- 阶段定义：`TD_1/TD_2/TD_3` 均为 `glm_asr_triton_template` 在三项优化累积过程中的检查点。
+
+### 11.1 实测结果
+
+| 系统/阶段 | Time (ms) | 波动 (ms) | Tokens | Speed (ms/token) | Accuracy | Status |
+|---|---:|---:|---:|---:|---:|---|
+| example (`glm_asr_triton_example`) | 1482.0 | 0.5 | 13 | 114.00 | 100.0% | PASS |
+| TD_1 (`glm_asr_triton_template`) | 1440.3 | 0.7 | 13 | 110.79 | 100.0% | PASS |
+| TD_2 (`glm_asr_triton_template`) | 1440.4 | 2.1 | 13 | 110.80 | 100.0% | PASS |
+| TD_3 (`glm_asr_triton_template`) | 1216.9 | 1.1 | 13 | 93.61 | 100.0% | PASS |
+
+### 11.2 差异汇总（以 example 为基准）
+
+- `TD_1 vs example`：`-41.7 ms`（`-2.81%`）
+- `TD_2 vs example`：`-41.6 ms`（`-2.81%`，基本与 TD_1 持平）
+- `TD_3 vs example`：`-265.1 ms`（`-17.89%`）
+- Tokens 一致（均为 13），正确性一致（均 `Accuracy 100.0%` 且 `PASS`）
+
+### 11.3 结论
+
+- 端到端主对比应使用 `example -> TD_1 -> TD_2 -> TD_3` 四阶段口径。
+- 在当前会话下，`TD_1/TD_2` 相对 `example` 仅小幅改善；主要端到端收益来自 `TD_3`。
+
+## 12. 与 detailed 口径关系（解释端到端与组件级差异）
+
+说明：
+
+- `benchmark_detailed`：用于组件级分析与 `Total (50 tokens est.)` 估算。
+- `benchmark.sh`：用于真实端到端验收（本样本实际生成 13 tokens）。
+
+### 12.1 关键对应关系
+
+- 第 2 项在 `benchmark_detailed` 中体现为组件级收益（`Total est. -3.89%`），但在 `benchmark.sh` 端到端口径下与 `TD_1` 基本持平。
+- 第 3 项在两种口径下均显示为稳定净收益，是当前端到端改进的主要来源。
+
+## 13. 写作板块（report.tex 第 2-6 节）
+
+### 13.1 report.tex 第 2-6 节对应落地清单（按章节填写）
+
+- [x] Section 2（Implementation）
+  - 有 C0-C5 控制变量实验、最终 C4 选型与参数理由（`BLOCK_K`、`warps`、`stages`）。
+  - 有 Kernel Fusion 与 FlashAttention-style 的设计变化说明（What/Why）。
+- [x] Section 3（Performance Profiling）
+  - 有统一环境快照（`srun` 命令、MIG 规格、torch/triton 版本）。
+  - 有双口径结果：`benchmark_detailed`（TD_1/TD_2/TD_3）与 `benchmark.sh`（example/TD_1/TD_2/TD_3）。
+- [x] Section 4（Bottleneck Analysis）
+  - 有 compute-leaning / memory-leaning 分类依据。
+  - 有 `Prefill + 50 * DecodeStep` 的占比拆解与“TD_2 端到端近乎持平”的解释。
+- [x] Section 5（Optimization Attempts）
+  - 三项优化均按 `Hypothesis -> Change -> Result` 结构可回填。
+  - 口径已拆分：组件级收益与端到端收益分开描述，避免混写。
+- [x] Section 6（Comparison）
+  - 有四阶段主对比（`example -> TD_1 -> TD_2 -> TD_3`）用于优化路径展示。
+  - 有 `example vs final template` 对比（1220.5ms vs 1482.0ms，`-17.64%`）用于最终结论展示。
+
+### 13.2 报告可直接引用的结论句（草案级）
+
+- [ ] 优化1结论句：
+  - 在统一口径下，tile/block + launch 参数的控制变量实验显示 C4（`64/64/64, w4, s2`）为当前最优，较 C0 的 `benchmark_detailed Total (50 tokens est.)` 改善 `7.56%`。
+- [ ] 优化2结论句：
+  - 在 C4 基线上接入 `Linear + Bias + GELU` 融合后，`benchmark_detailed` 口径显示组件级 `Total (50 tokens est.)` 改善 `3.89%`，但 `benchmark.sh` 端到端口径（13 tokens）与 `TD_1` 基本持平（`+0.01%`），说明组件收益未稳定转化为该口径下的整体时延收益。
+- [ ] 优化3结论句：
+  - 在 `TD_2` 基线上接入 FlashAttention-style 路径后，`benchmark_detailed` 口径的 `Total (50 tokens est.)` 改善 `8.13%`，且 `benchmark.sh` 端到端时延从 `1440.4 ms` 下降到 `1216.9 ms`（`-15.52%`）；收益主要来自 `Audio Encoder`，`Prefill/Decode Step` 有小幅波动。
+
+### 13.3 与 report.tex Section 6 的口径对应
+
+- 四阶段主对比（第 11 节）用于展示优化路径：`example -> TD_1 -> TD_2 -> TD_3`。
+- `report.tex` 的最终结论对比使用 `example vs final template`：
+  - example：`1482.0 ms`
+  - final template：`1220.5 ms`
+  - 变化：`-17.64%`
+- 说明：`TD_3=1216.9 ms` 与 final template `1220.5 ms` 来自不同次 `benchmark.sh` 复跑，均在同口径下，差异可视为复跑波动。
