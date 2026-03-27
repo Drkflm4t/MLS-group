@@ -755,10 +755,10 @@ class Linear:
     """Linear layer with switchable backend (torch or Triton)."""
 
     TILE_M = 64
-    TILE_N = 128
-    TILE_K = 32
-    NUM_WARPS = 8
-    NUM_STAGES = 4
+    TILE_N = 64
+    TILE_K = 64
+    NUM_WARPS = 4
+    NUM_STAGES = 2
 
     BACKEND = "torch"
 
@@ -966,8 +966,8 @@ class MLP:
     """MLP with SwiGLU gating using Triton."""
 
     FUSED = True
-    TILE_M, TILE_N, TILE_K = 64, 128, 32
-    NUM_WARPS, NUM_STAGES = 8, 4
+    TILE_M, TILE_N, TILE_K = 64, 64, 64
+    NUM_WARPS, NUM_STAGES = 4, 2
 
     def __init__(
         self,
@@ -1096,8 +1096,8 @@ class EncoderMLP:
     """Encoder MLP (no gating) using Triton."""
 
     FUSED = True
-    TILE_M, TILE_N, TILE_K = 64, 128, 32
-    NUM_WARPS, NUM_STAGES = 8, 4
+    TILE_M, TILE_N, TILE_K = 64, 64, 64
+    NUM_WARPS, NUM_STAGES = 4, 2
 
     def __init__(
         self,
