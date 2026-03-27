@@ -236,6 +236,7 @@
 ### 10.2 Bottleneck 定量与归因（Section 4 可直接引用）
 
 - 端到端主导项（以总时延占比）：
+  - `TD_1`: Decoder(50 steps) `1781.49ms`，约 `68.9%`；Audio Encoder `795.24ms`，约 `30.8%`。 
   - `TD_2`：Decoder(50 steps) `1442.32ms`，约 `58.1%`；Audio Encoder `828.13ms`，约 `33.3%`。
   - `TD_3`：Decoder(50 steps) `1456.50ms`，约 `63.8%`；Audio Encoder `604.79ms`，约 `26.5%`。
 - 算力定量（可观测）：Linear/GEMM micro-benchmark 估计吞吐约 `5.0 TFLOPS`（日志 `Estimated GFLOPS` 约 `5026~5075`）。
